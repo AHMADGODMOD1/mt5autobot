@@ -1,91 +1,82 @@
-# MT5 AI Autobot
+# MT5 AI Autobot — Iron Mode
 
-Windows-first MT5 AI trading bot. It does **not** store or request your broker login, broker password, or server. The Python MT5 integration calls `mt5.initialize()`, which finds/starts MetaTrader 5 and connects to the account already active/saved in the terminal.
+Windows-first MT5 AI trading system focused on fast analysis and capital protection.
 
-## Simple flow
+## Architecture
 
-1. MetaTrader 5 is installed on Windows.
-2. You log in to the account inside MT5 itself.
-3. The bot starts and calls `mt5.initialize()`.
-4. It reads the currently active account with `account_info()`.
-5. It checks MT5/account trading permissions before any live order.
-6. Market data from D1/H4/H1/M15/M5 is sent to the online AI endpoint.
-7. AI returns BUY / SELL / WAIT + SL / TP.
-8. Risk engine validates the trade and calculates size.
-9. Only then can the order be sent to the already logged-in MT5 account.
+MT5 (already logged in)
+→ D1/H4/H1/M15/M5 market data
+→ risk/spread filters
+→ direct Google AI Studio / Gemini
+→ independent validation
+→ consensus gate
+→ position sizing
+→ MT5 order_check
+→ MT5 order_send
+→ dashboard + SQLite journal
 
-## AI: simple online setup
+The bot does not store broker login/password/server. MetaTrader 5 is logged in normally on Windows and the Python integration uses that active terminal session.
 
-FreeLLMAPI and OmniRoute are no longer required.
+## AI
 
-Default:
+This final version uses Google AI Studio directly. FreeLLMAPI is not required.
+
+Local .env:
 ```env
-AI_PROVIDER=openrouter
-AI_BASE_URL=https://openrouter.ai/api/v1
-AI_MODEL=openai/gpt-oss-120b:free
-AI_API_KEY=
+GOOGLE_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
+AI_FAST_MODEL=gemini-3.8-flash
+AI_VALIDATOR_MODEL=gemini-3.8-flash
+AI_MAX_CALLS_PER_CYCLE=2
 ```
 
-This uses OpenAI's open-weight GPT-OSS 120B through OpenRouter's online free endpoint. OpenRouter free usage is rate-limited, so it is suitable for testing/light use rather than guaranteed production capacity.
+The bot can run two independent analysis passes. A directional signal requires agreement. If Google is unavailable or the models disagree, the system returns WAIT and does not trade.
 
-Create one OpenRouter API key and paste it only into your local `.env`. Never commit or send the key in chat.
+Free API quotas and model availability can change. No AI API provides a guaranteed profit rate or unlimited free tokens.
 
-## MT5 credentials
+## Risk-first protections
 
-There are deliberately **no** settings for:
-- MT5 login
-- MT5 password
-- broker server
+Defaults are deliberately conservative:
+- 0.25% risk per trade
+- 2% daily loss guard
+- 5% peak-equity drawdown guard
+- maximum 3 open positions
+- spread guard
+- 120-second execution cooldown
+- minimum 75 confidence
+- AI disagreement = WAIT
+- missing/invalid SL = no order
+- MT5 Algo Trading/account expert permission required
+- order_check before order_send
 
-The bot uses the account already logged in inside the MetaTrader 5 Windows terminal. If MT5 is closed, `mt5.initialize()` can launch/find the installed terminal.
-
-Before LIVE execution the bot checks:
-- terminal connected
-- MT5 Algo Trading permission
-- Python trade API not disabled
-- account trading allowed
-- account expert trading allowed
-
-If these checks fail, live execution is blocked.
+No system can guarantee profit or eliminate losses. The goal is to reject poor setups and cap damage when conditions go wrong.
 
 ## Windows setup
 
-1. Install MetaTrader 5 and log in normally inside MT5.
-2. Clone/download this repository.
-3. Double-click `setup.bat`.
-4. Open the generated `.env`.
-5. Put only your OpenRouter API key in `AI_API_KEY`.
-6. Set `SYMBOLS` to the exact symbols used by your broker.
-7. Keep `TRADING_MODE=PAPER` and `ALLOW_LIVE_TRADING=false` for the first test.
-8. Double-click `start.bat`.
-9. Open `http://127.0.0.1:8000`.
-10. Confirm the dashboard shows the correct MT5 login/server/balance and Algo Trading readiness.
+1. Install MetaTrader 5 and log into your account inside MT5.
+2. Download/clone this repository.
+3. Run setup.bat.
+4. Open the generated .env.
+5. Put your Google AI Studio API key only in GOOGLE_API_KEY.
+6. Set SYMBOLS to the exact broker symbols.
+7. Keep PAPER mode for testing.
+8. Run start.bat.
+9. Open http://127.0.0.1:8000.
+10. Verify the account, permissions, market data and AI response.
 
 ## Live mode
 
-Only after demo/PAPER verification:
+Only after successful demo testing:
 ```env
 TRADING_MODE=LIVE
 ALLOW_LIVE_TRADING=true
 ```
 
-Restart `start.bat`, make sure Algo Trading is enabled in MT5, then press **TRADING ON** in the dashboard.
+Then enable TRADING ON in the dashboard. If MT5 Algo Trading, account expert trading or the risk engine blocks execution, no live order is sent.
 
-The dashboard button controls this bot. It does not secretly enable MT5's Algo Trading setting. If MT5 Algo Trading is OFF, the bot refuses to send live orders.
+## Security
 
-## Risk defaults
+Never commit .env or any API key. The repository contains only placeholders.
 
-```env
-RISK_PER_TRADE=0.25
-MAX_DAILY_LOSS_PCT=2.0
-MAX_DRAWDOWN_PCT=5.0
-MAX_OPEN_POSITIONS=3
-MAX_SPREAD_POINTS=80
-MIN_AI_CONFIDENCE=70
-```
+## Hosting
 
-The bot also has entry cooldown, duplicate-direction protection, broker volume normalization and `order_check()` before `order_send()`.
-
-## Important
-
-AI output is not a profit guarantee. Test on demo first. Free online inference can be unavailable or rate-limited; when the AI endpoint fails, the bot fails closed to **WAIT** rather than inventing a signal.
+The source repository can be hosted on GitHub and the dashboard can be deployed separately. However, a cloud/Vercel server cannot directly operate the MT5 terminal installed on your Windows PC. The live execution worker therefore stays local beside MT5. This is intentional: broker credentials and the trading terminal remain on your machine.
