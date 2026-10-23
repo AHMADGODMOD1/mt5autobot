@@ -1,76 +1,71 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 
+title MT5 AI Autobot
+
 echo ==========================================
-echo       MT5 AI AUTOBOT - START
+echo          MT5 AI AUTOBOT
+echo       ONE-CLICK SETUP + START
 echo ==========================================
 echo.
 
+REM ---- Python check ----
 where py >nul 2>nul
 if errorlevel 1 (
-  echo Python 3.11+ not found.
-  echo Install Python 3.11+ and try again.
-  pause
-  exit /b 1
-)
-
-if not exist ".venv\Scripts\python.exe" (
-  echo First-time setup required. Starting setup automatically...
-  echo.
-  call "%~dp0setup.bat"
-  if errorlevel 1 (
-    echo.
-    echo Setup failed.
+    echo ERROR: Python 3.11+ was not found.
+    echo Install Python 3.11+ and run this file again.
     pause
     exit /b 1
-  )
 )
 
-if not exist ".venv\Scripts\python.exe" (
-  echo Setup finished but .venv was not found.
-  echo Rebuilding the virtual environment directly...
-  echo.
+REM ---- Create virtual environment if missing ----
+if not exist "%~dp0.venv\Scripts\python.exe" (
+    echo [1/4] Creating Python environment...
+    py -3 -m venv "%~dp0.venv"
+    if errorlevel 1 (
+        echo ERROR: Could not create Python environment.
+        pause
+        exit /b 1
+    )
+) else (
+    echo [1/4] Python environment already ready.
+)
 
-  py -3 -m venv "%~dp0.venv"
-  if errorlevel 1 (
-    echo.
-    echo Could not create the Python virtual environment.
-    echo Please send the exact error shown above.
+REM ---- Install/update dependencies ----
+echo [2/4] Installing required packages...
+"%~dp0.venv\Scripts\python.exe" -m pip install --disable-pip-version-check -q -r "%~dp0requirements.txt"
+if errorlevel 1 (
+    echo ERROR: Package installation failed.
+    echo Run this file again after checking the error above.
     pause
     exit /b 1
-  )
+)
 
-  call "%~dp0.venv\Scripts\activate.bat"
-  python -m pip install --upgrade pip
-  python -m pip install -r "%~dp0requirements.txt"
-  if errorlevel 1 (
+REM ---- Create .env only if missing ----
+if not exist "%~dp0.env" (
+    copy /Y "%~dp0.env.example" "%~dp0.env" >nul
     echo.
-    echo Package installation failed.
+    echo [3/4] .env created from .env.example.
+    echo.
+    echo IMPORTANT: Open .env and add your Google AI Studio API key.
+    echo Then run this same start.bat again.
+    echo.
     pause
-    exit /b 1
-  )
+    exit /b 0
 )
 
-if not exist ".env" (
-  copy /Y ".env.example" ".env" >nul
-  echo.
-  echo .env was created.
-  echo Add your Google AI Studio API key to .env, save it, then run start.bat again.
-  pause
-  exit /b 0
-)
-
-call ".venv\Scripts\activate.bat"
-
+echo [3/4] Configuration found.
+echo [4/4] Starting MT5 AI Autobot...
 echo.
-echo Starting MT5 AI Autobot...
 echo Dashboard: http://127.0.0.1:8000
 echo Keep this window open while the bot is running.
 echo.
 
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+"%~dp0.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 
 echo.
+echo ==========================================
 echo Bot stopped.
+echo ==========================================
 pause
