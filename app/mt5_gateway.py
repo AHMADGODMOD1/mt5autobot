@@ -7,9 +7,14 @@ def connect():
     # the account already selected/saved inside MT5.
     return bool(mt5.initialize())
 
-def shutdown(): mt5.shutdown()
-def account(): return mt5.account_info()
-def terminal(): return mt5.terminal_info()
+def shutdown():
+    mt5.shutdown()
+
+def account():
+    return mt5.account_info()
+
+def terminal():
+    return mt5.terminal_info()
 
 def trading_permissions():
     a=account(); t=terminal()
@@ -28,12 +33,58 @@ def can_algo_trade():
     return all((p["terminal_connected"],p["algo_trading_enabled"],p["python_trade_api_enabled"],
                p["account_trade_allowed"],p["account_expert_allowed"]))
 
+def resolve_symbol(symbol):
+    """Return an exact broker symbol, auto-resolving common suffixes."""
+    if mt5.symbol_info(symbol) is not None:
+        mt5.symbol_select(symbol, True)
+        return symbol
+
+    base = symbol
+    for suffix in ("m", ".m", "_m", "-m", "micro", "."):
+        if base.lower().endswith(suffix.lower()):
+            base = base[:-len(suffix)]
+            break
+
+    candidates = mt5.symbols_get()
+    if not candidates:
+        return None
+
+    exact = []
+    partial = []
+    target = base.lower()
+    for item in candidates:
+        name = getattr(item, "name", "")
+        low = name.lower()
+        if low == target:
+            exact.append(name)
+        elif low.startswith(target) or target in low:
+            partial.append(name)
+
+    selected = (exact + partial)
+    for name in selected:
+        if mt5.symbol_select(name, True):
+            return name
+    return None
+
 def tick(symbol):
-    if not mt5.symbol_select(symbol,True): return None
-    return mt5.symbol_info_tick(symbol)
-def symbol_info(symbol): return mt5.symbol_info(symbol)
-def rates(symbol,timeframe,count=300): return mt5.copy_rates_from_pos(symbol,timeframe,0,count)
-def positions(): return mt5.positions_get() or ()
+    resolved = resolve_symbol(symbol)
+    if not resolved:
+        return None
+    return mt5.symbol_info_tick(resolved)
+
+def symbol_info(symbol):
+    resolved = resolve_symbol(symbol) or symbol
+    return mt5.symbol_info(resolved)
+
+def rates(symbol,timeframe,count=300):
+    resolved = resolve_symbol(symbol)
+    if not resolved:
+        return None
+    return mt5.copy_rates_from_pos(resolved,timeframe,0,count)
+
+def positions():
+    return mt5.positions_get() or ()
+
 def history(days=30):
     from datetime import datetime,timedelta,timezone
     end=datetime.now(timezone.utc); start=end-timedelta(days=days)
