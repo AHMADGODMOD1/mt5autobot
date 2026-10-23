@@ -9,30 +9,14 @@ echo       ONE-CLICK SETUP + START
 echo ==========================================
 echo.
 
-REM Find a working Python installation.
-set "PYTHON_EXE="
-where python >nul 2>nul
-if not errorlevel 1 (
-    for /f "delims=" %%P in ('where python') do (
-        if not defined PYTHON_EXE set "PYTHON_EXE=%%P"
-    )
-)
+REM Prefer the known working Python 3.12 installation.
+set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
 
-REM The Windows py launcher may point to a removed Python installation.
-if not defined PYTHON_EXE (
-    where py >nul 2>nul
-    if not errorlevel 1 (
-        for /f "delims=" %%P in ('where py') do (
-            if not defined PYTHON_EXE set "PYTHON_EXE=%%P"
-        )
-    )
-)
-
-if not defined PYTHON_EXE (
-    echo ERROR: No working Python installation was found.
+if not exist "%PYTHON_EXE%" (
+    echo ERROR: Python 3.12 was not found at:
+    echo %PYTHON_EXE%
     echo.
-    echo Install Python 3.11-3.13, then run this file again.
-    echo Python 3.14 is not recommended for this MT5 bot.
+    echo Install Python 3.12 and run this file again.
     pause
     exit /b 1
 )
@@ -40,12 +24,11 @@ if not defined PYTHON_EXE (
 echo Python: %PYTHON_EXE%
 "%PYTHON_EXE%" --version
 if errorlevel 1 (
-    echo ERROR: The detected Python executable cannot be started.
+    echo ERROR: Python 3.12 could not be started.
     pause
     exit /b 1
 )
 
-REM Create virtual environment.
 if not exist "%~dp0.venv\Scripts\python.exe" (
     echo.
     echo [1/4] Creating Python environment...
@@ -53,7 +36,6 @@ if not exist "%~dp0.venv\Scripts\python.exe" (
     if errorlevel 1 (
         echo.
         echo ERROR: Could not create Python environment.
-        echo Make sure Python was installed with the standard venv component.
         pause
         exit /b 1
     )
