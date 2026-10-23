@@ -19,19 +19,16 @@ The bot does not store broker login/password/server. MetaTrader 5 is logged in n
 
 ## AI
 
-This final version uses Google AI Studio directly. FreeLLMAPI is not required.
+This version uses Google AI Studio directly. FreeLLMAPI is not required.
 
-Local .env:
-```env
-GOOGLE_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
-AI_FAST_MODEL=gemini-3.8-flash
-AI_VALIDATOR_MODEL=gemini-3.8-flash
-AI_MAX_CALLS_PER_CYCLE=2
-```
+Local `.env` values:
 
-The bot can run two independent analysis passes. A directional signal requires agreement. If Google is unavailable or the models disagree, the system returns WAIT and does not trade.
+    GOOGLE_API_KEY=YOUR_GOOGLE_AI_STUDIO_KEY
+    AI_FAST_MODEL=gemini-3.8-flash
+    AI_VALIDATOR_MODEL=gemini-3.8-flash
+    AI_MAX_CALLS_PER_CYCLE=2
 
-Free API quotas and model availability can change. No AI API provides a guaranteed profit rate or unlimited free tokens.
+The bot runs independent analysis passes. A directional signal requires agreement. If Google is unavailable or the models disagree, the system returns WAIT and does not trade.
 
 ## Risk-first protections
 
@@ -45,38 +42,42 @@ Defaults are deliberately conservative:
 - minimum 75 confidence
 - AI disagreement = WAIT
 - missing/invalid SL = no order
+- broker minimum stop-distance validation
 - MT5 Algo Trading/account expert permission required
-- order_check before order_send
+- order_check must pass before order_send
 
 No system can guarantee profit or eliminate losses. The goal is to reject poor setups and cap damage when conditions go wrong.
 
 ## Windows setup
 
-1. Install MetaTrader 5 and log into your account inside MT5.
-2. Download/clone this repository.
-3. Run setup.bat.
-4. Open the generated .env.
-5. Put your Google AI Studio API key only in GOOGLE_API_KEY.
-6. Set SYMBOLS to the exact broker symbols.
-7. Keep PAPER mode for testing.
-8. Run start.bat.
-9. Open http://127.0.0.1:8000.
-10. Verify the account, permissions, market data and AI response.
+1. Install MetaTrader 5 and log into your demo/live account inside MT5.
+2. Download the latest repository ZIP.
+3. Run `start.bat`.
+4. The script uses the installed Python 3.12 and creates the virtual environment automatically.
+5. On first run, `.env` is created.
+6. Put your Google AI Studio API key only in `GOOGLE_API_KEY`.
+7. Set `SYMBOLS` to the exact broker symbols shown in MT5 Market Watch.
+8. Keep `TRADING_MODE=PAPER` for the first test.
+9. Open `http://127.0.0.1:8000`.
+10. Verify account, permissions, market data and AI response.
 
 ## Live mode
 
-Only after successful demo testing:
-```env
-TRADING_MODE=LIVE
-ALLOW_LIVE_TRADING=true
-```
+Do not switch live on until the bot has completed a demo/PAPER test.
 
-Then enable TRADING ON in the dashboard. If MT5 Algo Trading, account expert trading or the risk engine blocks execution, no live order is sent.
+When you are ready, change only these local `.env` values:
+
+    TRADING_MODE=LIVE
+    ALLOW_LIVE_TRADING=true
+
+Restart `start.bat`, then enable `TRADING ON` in the dashboard.
+
+The bot will still refuse an order when MT5 permissions, spread, daily loss, drawdown, position limit, cooldown, confidence, SL/TP validation, broker stop-distance or `order_check` fails.
 
 ## Security
 
-Never commit .env or any API key. The repository contains only placeholders.
+Never commit `.env` or any API key. `.env.example` contains placeholders only. If an API key was ever committed to the public repository, revoke/rotate it in Google AI Studio and use the replacement only in your local `.env`.
 
 ## Hosting
 
-The source repository can be hosted on GitHub and the dashboard can be deployed separately. However, a cloud/Vercel server cannot directly operate the MT5 terminal installed on your Windows PC. The live execution worker therefore stays local beside MT5. This is intentional: broker credentials and the trading terminal remain on your machine.
+The dashboard source can be hosted separately, but live MT5 execution stays local beside the MT5 terminal on Windows. A cloud/Vercel server cannot directly operate the MT5 terminal installed on your PC.
