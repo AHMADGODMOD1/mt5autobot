@@ -92,3 +92,21 @@ The dashboard Trading ON/OFF controls this bot's execution permission and persis
 MT5 and broker credentials stay on your PC. Do not paste passwords or API keys into chat or GitHub.
 
 This is an execution tool, not a profit guarantee. Validate on demo before live execution.
+
+## FreeLLMAPI exact setup
+
+Use the FreeLLMAPI project you provided as the bot's primary LLM router. Its official README says the local server exposes an OpenAI-compatible API at `http://localhost:3001/v1`, the Keys page is where provider keys are added, and the dashboard header provides the unified `freellmapi-...` API key. The router can automatically fail over across configured providers/models.
+
+Windows: the project recommends its native Windows `.exe` release. Install/start FreeLLMAPI first, open `http://localhost:3001`, add the provider keys you actually have, configure the fallback chain, then copy the unified key. Keep FreeLLMAPI bound to localhost unless you deliberately need LAN access.
+
+Bot `.env`:
+```env
+AI_PROVIDER=freellmapi
+AI_BASE_URL=http://127.0.0.1:3001/v1
+AI_API_KEY=freellmapi-PASTE-YOUR-UNIFIED-KEY-HERE
+AI_MODEL=auto
+```
+
+Do not put the unified key in GitHub. `.env` is local-only. FreeLLMAPI stores provider keys encrypted at rest and is designed as a local-first single-user router.
+
+Before live trading, verify the bot can complete one test request through `/v1/chat/completions` and that FreeLLMAPI has at least one working provider key/model. If the router is unavailable, the trading bot fails closed to `WAIT` rather than inventing a signal.
