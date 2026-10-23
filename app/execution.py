@@ -23,40 +23,69 @@ def _fill(info):
 
 def execute(symbol,signal):
     side=signal.get("signal")
-    if side not in ("BUY","SELL"): return {"ok":False,"status":"NO_TRADE","reason":"Signal is WAIT"}
+    if side not in ("BUY","SELL"):
+        return {"ok":False,"status":"NO_TRADE","reason":"Signal is WAIT"}
     if TRADING_MODE!="LIVE" or not ALLOW_LIVE_TRADING:
         return {"ok":True,"status":"PAPER","reason":"Live execution disabled","signal":signal}
     if not can_algo_trade():
         return {"ok":False,"status":"ALGO_TRADING_BLOCKED","reason":"MT5 Algo Trading / account trading permission is OFF",
                 "permissions":trading_permissions()}
+
     now=datetime.now(timezone.utc); last=last_execution_time(symbol)
     if last and (now-last).total_seconds()<ENTRY_COOLDOWN_SECONDS:
         return {"ok":False,"status":"COOLDOWN","reason":"Entry cooldown active"}
+
     info=mt5.symbol_info(symbol); tick=mt5.symbol_info_tick(symbol)
-    if info is None or tick is None:return {"ok":False,"status":"ERROR","reason":"Symbol/tick unavailable"}
+    if info is None or tick is None:
+        return {"ok":False,"status":"ERROR","reason":"Symbol/tick unavailable"}
     mt5.symbol_select(symbol,True)
+
     price=tick.ask if side=="BUY" else tick.bid
     sl=float(signal.get("stop_loss") or 0); tp=float(signal.get("take_profit") or 0)
-    if sl<=0:return {"ok":False,"status":"ERROR","reason":"Missing stop_loss"}
-    if side=="BUY" and sl>=price:return {"ok":False,"status":"ERROR","reason":"BUY SL must be below entry"}
-    if side=="SELL" and sl<=price:return {"ok":False,"status":"ERROR","reason":"SELL SL must be above entry"}
+    if sl<=0:
+        return {"ok":False,"status":"ERROR","reason":"Missing stop_loss"}
+    if side=="BUY" and sl>=price:
+        return {"ok":False,"status":"ERROR","reason":"BUY SL must be below entry"}
+    if side=="SELL" and sl<=price:
+        return {"ok":False,"status":"ERROR","reason":"SELL SL must be above entry"}
     if tp and ((side=="BUY" and tp<=price) or (side=="SELL" and tp>=price)):
         return {"ok":False,"status":"ERROR","reason":"Invalid take_profit"}
+
+    stop_level_points=float(getattr(info,"trade_stops_level",0) or 0)
+    point=float(getattr(info,"point",0) or 0)
+    min_distance=stop_level_points*point
+    if min_distance>0 and abs(price-sl)<min_distance:
+        return {"ok":False,"status":"ERROR","reason":"Stop loss is inside broker minimum stop distance"}
+    if min_distance>0 and tp and abs(tp-price)<min_distance:
+        return {"ok":False,"status":"ERROR","reason":"Take profit is inside broker minimum stop distance"}
+
     positions=mt5.positions_get(symbol=symbol) or ()
     desired=mt5.POSITION_TYPE_BUY if side=="BUY" else mt5.POSITION_TYPE_SELL
     if any(getattr(p,"type",None)==desired and getattr(p,"magic",None)==MAGIC_NUMBER for p in positions):
         return {"ok":False,"status":"DUPLICATE","reason":"Existing same-direction bot position"}
+
     acc=mt5.account_info(); balance=float(acc.balance if acc else 0)
-    try: volume,risk_money=_volume(info,symbol,side,price,sl,balance)
-    except Exception as e:return {"ok":False,"status":"RISK_ERROR","reason":str(e)}
+    try:
+        volume,risk_money=_volume(info,symbol,side,price,sl,balance)
+    except Exception as e:
+        return {"ok":False,"status":"RISK_ERROR","reason":str(e)}
+
     digits=int(info.digits or 5)
     req={"action":mt5.TRADE_ACTION_DEAL,"symbol":symbol,"volume":volume,
          "type":mt5.ORDER_TYPE_BUY if side=="BUY" else mt5.ORDER_TYPE_SELL,
          "price":round(price,digits),"sl":round(sl,digits),"tp":round(tp,digits) if tp else 0.0,
          "deviation":20,"magic":MAGIC_NUMBER,"comment":"MT5-AI-AUTOBOT",
          "type_time":mt5.ORDER_TIME_GTC,"type_filling":_fill(info)}
+
     check=mt5.order_check(req)
-    if check is None:return {"ok":False,"status":"ORDER_CHECK_ERROR","reason":str(mt5.last_error())}
+    if check is None:
+        return {"ok":False,"status":"ORDER_CHECK_ERROR","reason":str(mt5.last_error())}
+
+    check_retcode=getattr(check,"retcode",None)
+    if check_retcode not in (0, mt5.TRADE_RETCODE_DONE, mt5.TRADE_RETCODE_PLACED):
+        return {"ok":False,"status":"ORDER_CHECK_BLOCKED","reason":getattr(check,"comment","Order check rejected"),
+                "retcode":check_retcode}
+
     result=mt5.order_send(req)
     return {"ok":bool(result and result.retcode==mt5.TRADE_RETCODE_DONE),"status":getattr(result,"retcode",None),
             "order":getattr(result,"order",None),"deal":getattr(result,"deal",None),"comment":getattr(result,"comment",""),
