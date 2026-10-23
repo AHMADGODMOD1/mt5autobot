@@ -3,6 +3,8 @@ from datetime import datetime,timezone
 import MetaTrader5 as mt5
 from .config import MAGIC_NUMBER,ALLOW_LIVE_TRADING,TRADING_MODE,RISK_PER_TRADE,ENTRY_COOLDOWN_SECONDS
 from .db import last_execution_time
+from .mt5_gateway import can_algo_trade,trading_permissions
+
 def _volume(info,symbol,side,price,sl,balance):
     if not sl or balance<=0: raise ValueError("Valid stop_loss and balance are required")
     typ=mt5.ORDER_TYPE_BUY if side=="BUY" else mt5.ORDER_TYPE_SELL
@@ -13,15 +15,20 @@ def _volume(info,symbol,side,price,sl,balance):
     raw=risk_money/abs(float(loss))
     volume=max(vmin,min(vmax,(raw//step)*step))
     return round(volume,8),risk_money
+
 def _fill(info):
     mode=getattr(info,"filling_mode",None)
     allowed={getattr(mt5,"ORDER_FILLING_FOK",0),getattr(mt5,"ORDER_FILLING_IOC",1),getattr(mt5,"ORDER_FILLING_RETURN",2)}
     return mode if mode in allowed else mt5.ORDER_FILLING_IOC
+
 def execute(symbol,signal):
     side=signal.get("signal")
     if side not in ("BUY","SELL"): return {"ok":False,"status":"NO_TRADE","reason":"Signal is WAIT"}
     if TRADING_MODE!="LIVE" or not ALLOW_LIVE_TRADING:
         return {"ok":True,"status":"PAPER","reason":"Live execution disabled","signal":signal}
+    if not can_algo_trade():
+        return {"ok":False,"status":"ALGO_TRADING_BLOCKED","reason":"MT5 Algo Trading / account trading permission is OFF",
+                "permissions":trading_permissions()}
     now=datetime.now(timezone.utc); last=last_execution_time(symbol)
     if last and (now-last).total_seconds()<ENTRY_COOLDOWN_SECONDS:
         return {"ok":False,"status":"COOLDOWN","reason":"Entry cooldown active"}
